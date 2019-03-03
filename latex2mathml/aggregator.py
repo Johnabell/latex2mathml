@@ -77,8 +77,12 @@ def environment(begin, tokens):
                 except EmptyGroupError:
                     pass
             elif token == '-':
+                # This causes an index out of range error in the converter when you have
+                # things like -\sqrt{a} or -\frac{num}{den}. Unfortunately, to fix this 
+                # properly, it seems like a substancial reworking of the approach will be 
+                # needed a hack to fix it is to add braces: -{\sqrt{a}}/ -{\frac{num}{den}}
                 try:
-                    next_token = next(tokens)
+                    next_token = next_item_or_group(tokens)
                     row.append([token, next_token])
                 except StopIteration:
                     row.append(token)
@@ -93,8 +97,11 @@ def environment(begin, tokens):
             break
     if len(row):
         content.append(row)
-    while len(content) == 1 and isinstance(content[0], list):
-        content = content.pop()
+    # Not sure why this is here, it causes and index out of range error in the converter 
+    # for arrays and matrices of one element - have commented out the code 
+    # - this does not seem to have broken anything else.
+    # while len(content) == 1 and isinstance(content[0], list):
+    #     content = content.pop()
     if alignment:
         return r'\{}'.format(env), ''.join(alignment), content
     else:
@@ -116,24 +123,27 @@ def _aggregate(tokens):
             if isinstance(token, list):
                 aggregated.append(token)
             elif token == '[':
-                try:
-                    g = group(tokens, '[', ']')
-                    if len(aggregated):
-                        previous = aggregated[-1]
-                        if previous == r'\sqrt':
-                            root = next(tokens)
-                            if root == '{':
-                                try:
-                                    root = group(tokens)
-                                except EmptyGroupError:
-                                    root = ''
-                            aggregated[-1] = r'\root'
-                            aggregated.append(root)
-                        else:
-                            pass  # FIXME: possible issues
-                    aggregated.append(g)
-                except EmptyGroupError:
-                    aggregated += ['[', ']']
+                previous = aggregated[-1]
+                if previous in [r'\left', r'\right']:
+                    aggregated.append(token)
+                else:
+                    try:
+                        g = group(tokens, '[', ']')
+                        if len(aggregated):
+                            if previous == r'\sqrt':
+                                root = next(tokens)
+                                if root == '{':
+                                    try:
+                                        root = group(tokens)
+                                    except EmptyGroupError:
+                                        root = ''
+                                aggregated[-1] = r'\root'
+                                aggregated.append(root)
+                            else:
+                                pass  # FIXME: possible issues
+                        aggregated.append(g)
+                    except EmptyGroupError:
+                        aggregated += ['[', ']']
             elif token in '_^':
                 process_sub_sup(aggregated, token, tokens)
             elif token.startswith(r'\begin') or token in MATRICES:
