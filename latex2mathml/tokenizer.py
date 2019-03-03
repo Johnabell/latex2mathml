@@ -76,10 +76,13 @@ def tokenize(data):
                 else:
                     if buffer == '\\':
                         yield buffer + char
+                        buffer = ''
                     elif len(buffer):
                         yield buffer
                         buffer = ''
-                    yield char
+                        yield char
+                    else:
+                        yield char
             else:
                 if len(buffer):
                     yield buffer
